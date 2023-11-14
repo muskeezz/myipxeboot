@@ -1,2 +1,7 @@
-/pxeboot/iso/
-/pxeboot/os-images/
+ipxe.efi
+ipxe.pxe
+iso/
+os-images/
+undionly.kkkpxe
+undionly.kkpxe
+undionly.kpxe
