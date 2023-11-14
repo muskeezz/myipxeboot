@@ -1,0 +1,31 @@
+#!ipxe
+
+set server_ip  10.10.10.204
+set nfs_server_ip 10.10.10.100
+set url	http://${next-server}/
+set root_path  /export/pxeboot
+
+menu Select an OS to boot
+item ubuntu-22.04.3-desktop-amd64         Install Ubuntu Desktop 22.04.3 LTS NFS
+item ubuntu-20.04.4-live-server		Install Ubuntu Live Server 20.04 LTS NFS
+choose --default exit --timeout 10000 option && goto ${option}
+
+:ubuntu-20.04.4-live-server
+set os_root /os-images/ubuntu-20.04.4-live-server
+#kernel nfs://${nfs_server_ip}${root_path}${os_root}/casper/vmlinuz
+kernel http://${server_ip}${root_path}${os_root}/casper/vmlinuz
+#initrd nfs://${nfs_server_ip}${root_path}${os_root}/casper/initrd
+initrd http://${server_ip}${root_path}${os_root}/casper/initrd
+#imgargs vmlinuz initrd=initrd netboot=nfs ip=dhcp nfsroot=${nfs_server_ip}:${root_path}${os_root} quiet ---
+imgargs vmlinuz initrd=initrd netboot=nfs ip=dhcp nfsroot=${nfs_server_ip}:${root_path}${os_root} ---
+boot
+
+:ubuntu-22.04.3-desktop-amd64
+set os_root /os-images/ubuntu-22.04.3-desktop
+#kernel tftp://${server_ip}${os_root}/casper/vmlinuz
+kernel nfs://${nfs_server_ip}${root_path}${os_root}/casper/vmlinuz
+#initrd tftp://${server_ip}${os_root}/casper/initrd
+initrd nfs://${nfs_server_ip}${root_path}${os_root}/casper/initrd
+#imgargs vmlinuz initrd=initrd boot=casper maybe-ubiquity netboot=nfs ip=dhcp nfsroot=${server_ip}:${root_path}${os_root} quiet splash ---
+imgargs vmlinuz initrd=initrd boot=casper maybe-ubiquity netboot=nfs ip=dhcp nfsroot=${nfs_server_ip}:${root_path}${os_root} ---
+boot

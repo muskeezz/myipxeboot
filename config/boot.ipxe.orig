@@ -1,0 +1,11 @@
+# sudo vi /pxeboot/config/boot.ipxe
+#!ipxe
+
+set base http://${next-server}/                       # pxeboot url
+set os_iso ${base}iso/                                # where the OS iso image
+set seed ${base}${os_iso}ubuntu-22.04.3-desktop/      # where the userdata, meta-data, vmlinuz and initrd
+
+#kernel ${base}/vmlinuz initrd=initrd autoinstall url=${base}ubuntu-22.04.3-desktop-amd64.iso net.ifnames=0 biosdevname=0 ip=dhcp ds=nocloud-net;s=${seedfrom}
+kernel ${seed}casper/vmlinuz initrd=initrd autoinstall url=${os_iso}ubuntu-22.04.3-desktop-amd64.iso net.ifnames=0 biosdevname=0 ip=dhcp ds=nocloud-net;s=${seed} cloud-config-url=/dev/null fsck.mode=skip
+initrd ${seed}casper/initrd
+boo

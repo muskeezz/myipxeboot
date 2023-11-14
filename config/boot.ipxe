@@ -1,0 +1,11 @@
+#!ipxe
+
+set base http://${next-server}/                       # pxeboot url
+set os_iso ${base}iso/                                # where the OS iso image
+set seed ${base}os-images/ubuntu-20.04.4-live-server/      # where the userdata, meta-data, vmlinuz and initrd
+
+#kernel ${base}/vmlinuz initrd=initrd autoinstall url=${base}ubuntu-22.04.3-desktop-amd64.iso net.ifnames=0 biosdevname=0 ip=dhcp ds=nocloud-net;s=${seedfrom}
+#kernel ${seed}casper/vmlinuz initrd=initrd autoinstall url=${os_iso}ubuntu-22.04.3-desktop-amd64.iso net.ifnames=0 biosdevname=0 ip=dhcp ds=nocloud-net;s=${seed} cloud-config-url=/dev/null fsck.mode=skip
+kernel ${seed}casper/vmlinuz initrd=initrd autoinstall url=${os_iso}ubuntu-20.04.4-live-server-amd64.iso ip=dhcp ds=nocloud-net;s=${seed}
+initrd ${seed}casper/initrd
+boot
