@@ -1,0 +1,49 @@
+#cloud-config
+autoinstall:
+  version: 1
+  packages:
+    - ubuntu-desktop
+  snaps:
+    - name: firefox
+    - name: gnome-3-38-2004
+    - name: gtk-common-themes
+    - name: snap-store
+    - name: snapd-desktop-integration
+  identity:
+    realname: ''
+    hostname: ubuntu-desktop
+    ### username: ubuntu password: password
+    password: $y$j9T$FgHxHd2QNknMu9GyF2ggL1$wjzpjkUDI2IoifmEwXrj8RRoOFGE8mxashb9xkOeGW0
+    username: ubuntu
+  ssh:
+    allow-pw: true
+    authorized-keys: [ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCsx1adprA9i8/4EEB6lwnZm4iv28u2Onc/Dd2T2wfrn/KeFn7tXQ68zJhGV+is+HFkxbYgTvDFzC45zG2BuS1o464cgxapJ0soTgHhZ7kjXGZv4r14OhxSlrNGR0g2CaPUCmZCUFB7F4U/hXrVkzqi4W/akspaDZ9osG68fYF/9dT/GlIWWP7FjC3L5Y4dU7ZCSw191M9FULfemTGyGVsBvCRG5KBTsuSIFdZwcGVDjNWxf41/ggwyD4d0v1F67eUizbUCVFvZtQSFuEYMtukhwZt/TjO/i60S8Lvlaz3I8EucLP2igSdT8JzohBAGwhaFvewIQbRiMokC1PicPxj2v3NtjfaKANWjjQ1oSi53Y7u9gvOx4Tq4641LOsSOdzyLyoQFCG48x0Lwe5Tj9S/VDpk+pvaKJ6eVBGVduIT2dyDQcL1DEt0cS8ypQ1Ubj7D0L8pup23kAjurOPfvjVRK1IpF2G5nqa0gj+rDG/9e2voVcVkSn0aC2jG8fzCvOKJHwu0wcNx4aB/Zk9zXt5Mid434E+w6bcCUzzc3Bcn77FDdq/0ff6rewg/nVchkZV8eFzCHBcsYCHSjkvGkidM4/QqQNY3FYMeNHcGDl4nT4tGsyTZXvEtXhcDEsUYQr9eKKdCnaPM46t73SrbubqbjuhuH6EU1FsZ+Ecq9vTI1zw== ubuntu@ubuntu-171]
+    install-server: true
+  storage:
+   layout:
+     name: lvm
+  early-commands:
+    - echo 'linux-generic-hwe-20.04' > /run/kernel-meta-package
+  #### POST Install commands
+  late-commands:   
+    #- sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /target/etc/ssh/sshd_config
+    - 'echo "ubuntu ALL=(ALL) NOPASSWD:ALL" > /target/etc/sudoers.d/ubuntu-nopw'
+    - chmod 440 /target/etc/sudoers.d/ubuntu-nopw
+    #- sed -i 's|^root:.:|root:$6$wjbhAd/wF1HKn7V.$W8IIgNtvQCu1L90XXvZahP9Lm2ILPF/juY.ExliRbpyXclEyBTK1F3u1FJdWGL0HnNPwThorz/:|' /target/etc/shadow
+    #- curtin in-target --target=/target -- apt-get purge -y snapd
+    - >-
+      curtin in-target --
+      sed -i /etc/default/grub -e 's/GRUB_CMDLINE_LINUX_DEFAULT=".*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash ipv6.disable=1"/'
+    - >-
+      curtin in-target --
+      sed -i /etc/default/grub -e 's/GRUB_CMDLINE_LINUX=".*/GRUB_CMDLINE_LINUX="ipv6.disable=1"/' 
+    - curtin in-target -- update-grub
+    - rm /target/etc/netplan/00-installer-config*yaml
+    - >-
+      printf "network:\n  version: 2\n  renderer: NetworkManager"
+      > /target/etc/netplan/01-network-manager-all.yaml
+    - curtin in-target -- apt-get install -y cloud-init
+    - curtin in-target -- apt-get autoremove -y
+    #- wget -O /target/postinstall.sh http://10.10.10.204/os-images/ubuntu-20.04.4-live-server/postinstall.sh
+    #- curtin in-target -- bash /postinstall.sh
+    #- rm /target/postinstall.sh
