@@ -1,0 +1,217 @@
+###Setup tftp###
+
+1. Fresh Ubuntu 22.04 Installed
+2. Update and Upgrade ubuntu
+# sudo apt update && sudo apt upgrade -y
+3. Setup TFTP
+# sudo apt install tftpd-hpa -y
+# sudo systemctl status tftpd-hpa
+4. Configure TFPT
+# sudo cat /etc/default/tftpd-hpa
+# /etc/default/tftpd-hpa
+
+TFTP_USERNAME="tftp"
+TFTP_DIRECTORY="/pxeboot"
+TFTP_ADDRES=":69"
+TFTP_OPTION="--secure"
+# sudo chown tftp:tftp /pxeboot
+# sudo systemctl restart tftpd-hpa
+# sudo systemctl enable ftfpd-hpa
+# sudo systemctl status tftpd-hpa
+# sudo ufw allow tftp
+
+###Setup apache2###
+# sudo apt install apache2 -y
+# vi /etc/apache2/conf-available/tftp.conf
+Directory /tftp
+        Options +FollowSymLinks +Indexes
+        Require all granted
+/Directory
+Alias /tftp /pxeboot
+# sudo a2enconf tftp
+# sudo systemctl restart apache2
+# sudo systemctl enable apache2
+# sudo systemctl status apache2
+
+##Setup NFS Share
+# sudo apt install nfs-common
+# sudo systemctl status nfs-client.target
+# sudo systemctl start nfs-client.target
+# sudo systemctl enable nfs-client.target
+# sudo mkdir -p /pxeboot
+# sudo mount 10.10.10.100:/pxeboot /pxeboot
+# df -h
+# sudo vi /etc/fstab
+10.10.10.100:/pxeboot /pxeboot nfs default 0 0
+
+###Enable require port
+# sudo ufw default deny incoming
+# sudo ufw default allow outgoing
+# sudo ufw allow ssh
+# sudo ufw allow http
+# sudo ufw allow https
+# sudo ufw allow nfs
+# sudo ufw allow tftp
+# sudo ufw enable
+# sudo ufw status
+
+######other package(OPTIONAL)
+####### sudo apt install whois tree
+
+###Setup pxe boot###
+https://linuxhint.com/pxe_boot_ubuntu_server/
+##Setup iPXE
+# sudo mkdir -pv /pxeboot/{config,os-images}
+#Directory structure
+/pxeboot
+└─config
+└─os-images
+
+# sudo apt update
+# sudo apt install build-essential liblzma-dev isolinux git -y
+
+###IF YOU ENCOUNTER A FETCH PACKAGE ERROR, CHANGE YOUR REPOSITORY SITE TO PH
+# sudo sed -i 's/\/archive/\/ph.archive/g' /etc/apt/sources.list
+
+##Download ipxe package
+# cd /pxeboot/config
+# git clone https://github.com/ipxe/ipxe.git
+# cd ipxe/src
+
+##Configure ipxe settings
+###enable ipxe NFS protocol support
+# sudo sed -i 's/#undef\tDOWNLOAD_PROTO_NFS/#define\tDOWNLOAD_PROTO_NFS/' config/general.h
+
+#Ping support
+# sudo sed -i 's/\/\/#define\ PING_CMD/#define\ PING_CMD/' config/general.h
+# sudo sed -i 's/\/\/#define\ IPSTAT_CMD/#define\ IPSTAT_CMD/' config/general.h
+# sudo sed -i 's/\/\/#define\ REBOOT_CMD/#define\ REBOOT_CMD/' config/general.h
+# sudo sed -i 's/\/\/#define\ POWEROFF/#define\ POWEROFF_CMD/' config/general.
+
+##Build ipxe bootable for BIOS and EFI
+# vi bootconfig.ipxe
+#!ipxe
+
+dhcp
+chain tftp://${next-server}/config/boot.ipxe
+# make bin/{ipxe.pxe,undionly.kpxe,undionly.kkpxe,undionly.kkkpxe} bin-x86_64-efi/ipxe.efi EMBED=/pxeboot/config/bootconfig.ipxe ; sudo cp -v bin/{ipxe.pxe,undionly.kpxe,undionly.kkpxe,undionly.kkkpxe} bin-x86_64-efi/ipxe.efi /pxeboot/
+
+##Existing DHCP Server###
+#Setup your DHCP Server(fortigate 90D)
+1. Login as admin
+2. Left side panel click Network>Interfaces
+3. Edit the VLAN/Port                                           # segment where the pxeboot server reside
+4. Check DHCP Server
+5. Click advanced
+6. Next Bootstrap Server: 10.10.30.200                          # pxeboot server
+7. Additional Options Create New
+Option Code: 67 (File Name)    Value: ipxe.efi         # for UEFI
+8. Click OK
+
+##Configure Ubuntu Distribution
+# wget https://releases.ubuntu.com/jammy/ubuntu-22.04-desktop-amd64.iso
+# sudo mount -o loop ubuntu-22.04-desktop-amd64.iso /mnt
+# mkdir -pv /pxeboot/os-images/ubuntu-22.04-desktop
+# sudo rsync -avz /mnt/ /pxeboot/os-images/ubuntu-22.04-desktop/
+# sudo umount /mnt
+#Directory structure
+/pxeboot/
+├── config
+│   └── boot.ipxe
+│   └── bootconfig.ipxe
+├── ipxe.efi
+├── ipxe.pxe
+├── os-images
+│   └──ubuntu-22.04.3-desktop
+│       ├── EFI
+│       ├── boot
+│       ├── boot.catalog
+│       ├── casper
+│       ├── dists
+│       ├── install
+│       ├── md5sum.txt
+│       ├── pool
+│       ├── preseed
+│       └── ubuntu -> .
+├── undionly.kkkpxe
+├── undionly.kkpxe
+└── undionly.kpxe
+
+##Create Boot Menu###
+# sudo vi /pxeboot/config/boot.ipxe
+#!ipxe
+
+set base http://${next-server}/                       # pxeboot url
+set os_iso ${base}iso/                                # where the OS iso image
+set seed ${base}os-images/ubuntu-20.04.4-live-server/      # where the userdata, meta-data, vmlinuz and initrd
+
+#kernel ${base}/vmlinuz initrd=initrd autoinstall url=${base}ubuntu-22.04.3-desktop-amd64.iso net.ifnames=0 biosdevname=0 ip=dhcp ds=nocloud-net;s=${seedfrom}
+#kernel ${seed}casper/vmlinuz initrd=initrd autoinstall url=${os_iso}ubuntu-22.04.3-desktop-amd64.iso net.ifnames=0 biosdevname=0 ip=dhcp ds=nocloud-net;s=${seed} cloud-config-url=/dev/null fsck.mode=skip
+kernel ${seed}casper/vmlinuz initrd=initrd autoinstall url=${os_iso}ubuntu-20.04.4-live-server-amd64.iso ip=dhcp ds=nocloud-net;s=${seed} cloud-config-url=/dev/null fsck.mode=skip
+initrd ${seed}casper/initrd
+boot
+
+##Create autoinstall config
+# sudo touch /pxeboot/os-images/ubuntu-22.04.03-desktop/meta-data
+# sudo vi /pxeboot/os-images/ubuntu-22.04.03-desktop/user-data
+#cloud-config
+autoinstall:
+  version: 1
+  packages:
+    - ubuntu-desktop
+  snaps:
+    - name: firefox
+    - name: gnome-3-38-2004
+    - name: gtk-common-themes
+    - name: snap-store
+    - name: snapd-desktop-integration
+  identity:
+    realname: ''
+    hostname: ubuntu-desktop
+    ### username: ubuntu password: password
+    password: $y$j9T$FgHxHd2QNknMu9GyF2ggL1$wjzpjkUDI2IoifmEwXrj8RRoOFGE8mxashb9xkOeGW0
+    username: ubuntu
+  ssh:
+    allow-pw: true
+    authorized-keys: [ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCsx1adprA9i8/4EEB6lwnZm4iv28u2Onc/Dd2T2wfrn/KeFn7tXQ68zJhGV+is+HFkxbYgTvDFzC45zG2BuS1o464cgxapJ0soTgHhZ7kjXGZv4r14OhxSlrNGR0g2CaPUCmZCUFB7F4U/hXrVkzqi4W/akspaDZ9osG68fYF/9dT/GlIWWP7FjC3L5Y4dU7ZCSw191M9FULfemTGyGVsBvCRG5KBTsuSIFdZwcGVDjNWxf41/ggwyD4d0v1F67eUizbUCVFvZtQSFuEYMtukhwZt/TjO/i60S8Lvlaz3I8EucLP2igSdT8JzohBAGwhaFvewIQbRiMokC1PicPxj2v3NtjfaKANWjjQ1oSi53Y7u9gvOx4Tq4641LOsSOdzyLyoQFCG48x0Lwe5Tj9S/VDpk+pvaKJ6eVBGVduIT2dyDQcL1DEt0cS8ypQ1Ubj7D0L8pup23kAjurOPfvjVRK1IpF2G5nqa0gj+rDG/9e2voVcVkSn0aC2jG8fzCvOKJHwu0wcNx4aB/Zk9zXt5Mid434E+w6bcCUzzc3Bcn77FDdq/0ff6rewg/nVchkZV8eFzCHBcsYCHSjkvGkidM4/QqQNY3FYMeNHcGDl4nT4tGsyTZXvEtXhcDEsUYQr9eKKdCnaPM46t73SrbubqbjuhuH6EU1FsZ+Ecq9vTI1zw== ubuntu@ubuntu-171]
+    install-server: true
+  #network:
+  #  network:
+  #    version: 2
+  #    #renderer: NetworkManager
+  #    ethernets:
+  #      eth0:
+  #        addresses:
+  #          - 10.10.10.207/24
+  #        gateway4: 10.10.10.1
+  #        nameservers: 
+  #          search: [itsmcorp.com]
+  #          addresses: [8.8.8.8]
+  storage:
+   layout:
+     name: lvm
+  early-commands:
+    - echo 'linux-generic-hwe-20.04' > /run/kernel-meta-package
+  #### POST Install commands
+  late-commands:   
+    - sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /target/etc/ssh/sshd_config
+    - 'echo "ubuntu ALL=(ALL) NOPASSWD:ALL" > /target/etc/sudoers.d/ubuntu-nopw'
+    - chmod 440 /target/etc/sudoers.d/ubuntu-nopw
+    - sed -i 's|^root:.:|root::|' /target/etc/shadow
+    #- curtin in-target --target=/target -- apt-get purge -y snapd
+    - >-
+      curtin in-target --
+      sed -i /etc/default/grub -e 's/GRUB_CMDLINE_LINUX_DEFAULT=".*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash ipv6.disable=1"/'
+    - >-
+      curtin in-target --
+      sed -i /etc/default/grub -e 's/GRUB_CMDLINE_LINUX=".*/GRUB_CMDLINE_LINUX="ipv6.disable=1"/'
+    - curtin in-target -- update-grub
+    - rm /target/etc/netplan/00-installer-config*yaml
+    - >-
+      printf "network:\n  version: 2\n  renderer: NetworkManager"
+      > /target/etc/netplan/01-network-manager-all.yaml
+    - curtin in-target -- apt-get install -y cloud-init
+    - curtin in-target -- apt-get autoremove -y
+    #- wget -O /target/postinstall.sh http://10.10.10.204/os-images/ubuntu-20.04.4-live-server/postinstall.sh
+    #- curtin in-target -- bash /postinstall.sh
+    #- rm /target/postinstall.sh

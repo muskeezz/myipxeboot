@@ -1,0 +1,8 @@
+Ubuntu installer ecosystem
+Debian Installer (d-i)              Classic installer that has been used until 18.04, deprecated in 20.04.
+Ubiquity                            Graphical desktop installer. D-i preseed based auto install is available. See manual also. LiveCD can be booted from nfsroot (alternate documentation). There are a number of arguments that you can pass to the installer on the kernel command line.
+Ubuntu Desktop Installer            New desktop installer, that replaces Ubiquity. GitHub repo is here. Discussion on Ubuntu Discourse about the new preview build. Refreshing the Ubuntu Desktop Installer thread.
+Subiquity                           Server installer frontend. GitHub repo can be found here.
+Casper                              An initramfs hook to boot live, preinstalled systems from read-only media. See Casper manpage. Ubiquity desktop and subiquity server install ISO medias relies on it.
+Curtin                              The curt installer is written in Python. Subiquity runs curtin in the background.
+Cloud-init                          Final configuration in the running system. Subiquity creates initial user, sets up ssh authorized key in the target system through cloud-init.

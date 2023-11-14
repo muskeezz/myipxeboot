@@ -1,0 +1,97 @@
+#!ipxe
+
+set server_ip  10.10.10.204
+set root_path  /pxeboot
+
+set menu-timeout 0               #5000
+set submenu-timeout ${menu-timeout}
+isset ${menu-default} || set menu-default exit
+
+# Figure out if client is 64-bit capable
+cpuid --ext 29 && set arch x64 || set arch x86
+cpuid --ext 29 && set archb 64 || set archb 32
+cpuid --ext 29 && set archl amd64 || set archl i386
+
+###################### MAIN MENU ####################################
+
+:start
+menu iPXE boot menu for ${asset}
+item --gap -- Network Interface: ${ifname} Mac Address: ${mac}     
+item --gap -- IP Address: ${ip} Netmaks: ${netmask} Gateway: ${gateway}
+item --gap -- Next-Server: ${next-server} Filename(67): ${filename}
+item --gap --             ------------------------- Operating systems ------------------------------
+item --key u ubuntu       Boot ubuntu from NFS
+item --gap --             ------------------------- Tools and utilities ----------------------------
+item --key p pxelinux     Load PXELinux menu
+item --key i menu-install Sub Menu for future Use
+item --gap --             ------------------------- Advanced options -------------------------------
+item --key c config       Configure settings
+item shell                Drop to iPXE shell
+item reboot               Reboot
+item
+item --key x exit         Exit iPXE and continue BIOS boot
+choose --timeout ${menu-timeout} --default ${menu-default} selected || goto cancel
+set menu-timeout 0
+goto ${selected}
+
+:cancel
+echo You cancelled the menu, dropping you to a shell
+
+:shell
+echo Type 'exit' to get the back to the menu
+shell
+set menu-timeout 0
+set submenu-timeout 0
+goto start
+
+:failed
+echo Booting failed, dropping to shell
+goto shell
+
+:reboot
+reboot
+
+:exit
+exit
+
+:config
+config
+goto start
+
+:back
+set submenu-timeout 0
+clear submenu-default
+goto start
+
+############ MAIN MENU ITEMS ############
+
+:ubuntu
+set os_root os-images/ubuntu-22.04.3-desktop
+kernel tftp://${server_ip}/${os_root}/casper/vmlinuz
+initrd tftp://${server_ip}/${os_root}/casper/initrd
+imgargs vmlinuz initrd=initrd boot=casper maybe-ubiquity netboot=nfs ip=dhcp nfsroot=${server_ip}:${root_path}/${os_root} quiet splash ---
+boot || goto failed
+goto start
+
+############################ INSTALLER MENU #########################
+
+:menu-install
+menu Installers for ${initiator-iqn}
+item freedos-install      Install FreeDOS 1.1 to iSCSI
+item msdos-install        Install MS-DOS 6.22 to iSCSI
+item ubuntu-install       Install Ubuntu 12.04 ${archl} to iSCSI
+item windows7-install     Install Windows 7 to iSCSI
+item vmware-x64-install   Install VMware ESXi 5.0 (x64) to iSCSI
+item vmware-x86-install   Install VMware ESXi 3.5 (x86) to iSCSI
+item winpe                Hook Windows 7 iSCSI and boot WinPE
+item winpe-wimboot        Boot WinPE ${arch} using wimboot
+item ubuntu-installer-remote Install Ubuntu 12.04 ${archl} from public archive
+item ubuntu-install-local Install Ubuntu 12.04 ${archl} to local drive(s)
+item xenclient-install   Install XenClient 2.1 to local drive
+item windows7-hookonly   Hook Windows 7 iSCSI and boot local CD
+item
+item --key 0x08 back      Back to top menu...
+iseq ${menu-default} menu-install && isset ${submenu-default} && goto menu-install-timed ||
+choose selected && goto ${selected} || goto start
+:menu-install-timed
+choose --timeout ${submenu-timeout} --default ${submenu-default} selected && goto ${selected} || goto start

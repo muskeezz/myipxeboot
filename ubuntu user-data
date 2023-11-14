@@ -1,0 +1,115 @@
+#cloud-config
+autoinstall:
+  version: 1
+  apt:
+    geoip: true
+    preserve_sources_list: false
+    primary:
+    - arches: [amd64, i386]
+      uri: http://us.archive.ubuntu.com/ubuntu
+    - arches: [default]
+      uri: http://ports.ubuntu.com/ubuntu-ports
+
+
+  identity:
+    hostname: ubuntu-desktop
+    ### username: ubuntu password: password
+    password: $6$5M2HAL9/egsclb3$2EJuz3HL5UuWl5BChaQFmIK1wjfDnXHa9LkrcwBppZLE8YnJhLHuEq3t3gKIa.KW1bIFI8hxVjFbkMe.TBVnO.
+    username: ubuntu
+  keyboard: {layout: us, toggle: null, variant: ''}
+  locale: en_US
+  network:
+    version: 2
+    ethernets:
+      bootif:
+        critical: true
+        dhcp-identifier: mac
+        dhcp4: true
+        nameservers:
+          addresses: [8.8.8.8]
+          search: [itsmcorp.com]
+  ssh:
+    allow-pw: true
+    authorized-keys: [ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDI3ibT2uXzlDQVsdiQsnkazVrlZUrcosoLED6OydhQkgfM4zT1iRggM08JaOlZNc3puBGmJlFqDmtf2VvyjeZ8vrOe9evO+KkMXAbw1e6dIl+ATeosjT7EtvcK8PeqP3UOAzJNKMUQ9esjiqSJAKu1dQ3DM8w5RISv21z+7XoXsy9ySEyITaGlushp0Dy9295l1y7bBbRcAeJW3YVe+PYskx/AapRFsW/PErrD2o1LdSg21ljgWKWwrTourVsXBnQaVqIqB/yzI8fURw7CREe1bbO+1oOA9P+9eKKFETK+3yCTM3TuzlHUxHcmCGs2M/nCWW31fqzLAqv4g1AsprDhW/BhVlf+YhbdWc837esDooDAU8MriTNSDjmT2qKDUtEJavKoMBJpODKbhrcqkdQjVQN9FFKvrB5eeJJClZR4pkVB6WawRCRK1siv8y4gfjVg7lEKNX8Cabcv5Pc2nfCpmfeOKyWS6/jpUZhNVNIVcxB8zxK9CL4IHLJiF0WO9EU= ubuntu@maas]
+    install-server: true
+
+  storage:
+    #### Don't create /root/swap.img file
+    swap:
+      size: 0
+    config:
+    #### prep system disks
+    - type: disk
+      id: disk-sda
+      path: /dev/sda
+      preserve: false
+      wipe: superblock-recursive
+      ptable: gpt
+      grub_device: true
+     #### disk partitions
+    - type: partition
+      number: 1
+      id: bios_boot_part   # required by GRUB on first disk
+      size: 1MB
+      device: disk-sda
+      flag: bios_grub
+    - type: partition
+      number: 2
+      id: boot_part       # /boot partition
+      size: 1G
+      device: disk-sda
+      preserve: false
+    - type: partition
+      number: 3
+      id: lvm_part        # add remaining space to LVM
+      size: -1
+      device: disk-sda
+      preserve: false
+     #### LVM volume group and logical volumes
+    - type: lvm_volgroup
+      id: vg0
+      name: vg0
+      devices:
+        - lvm_part
+    - type: lvm_partition
+      id: lvm_swap        # create swap partition on lvm
+      volgroup: vg0
+      name: swap
+      size: 8G
+    - type: lvm_partition
+      id: lvm_root        # create / partition on lvm, all available space
+      volgroup: vg0
+      name: root
+      #size: -1
+      size: 50%
+    #### Format the filesystems
+    - type: format
+      id: fs_boot_part
+      fstype: ext4
+      volume: boot_part
+    - type: format
+      id: fs_root
+      fstype: ext4
+      volume: lvm_root
+    - type: format
+      id: fs_swap
+      fstype: swap
+      volume: lvm_swap
+    #### Mount the filesystems
+    - type: mount
+      id: mount_boot
+      device: fs_boot_part
+      path: /boot
+    - type: mount
+      id: mount_root
+      device: fs_root
+      path: /
+    - type: mount
+      id: mount_swap
+      device: fs_swap
+      path: none
+  #### POST Install commands
+  late-commands:   
+    - sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /target/etc/ssh/sshd_config
+    - sed -i 's|^root:.:|root:$6$wjbhAd/wF1HKn7V.$W8IIgNtvQCu1L90XXvZahP9Lm2ILPF/juY.ExliRbpyXclEyBTK1F3u1FJdWGL0HnNPwThorz/:|' /target/etc/shadow
+    - curtin in-target --target=/target -- apt-get purge -y snapd

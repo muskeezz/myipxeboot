@@ -1,0 +1,135 @@
+Ubuntu autoinstall for version 20.04 and beyond...
+Earlier Ubuntu used Classic installer that was used until 18.04, deprecated in 20.04. Ubuntu 18.04 used preseeds for automating an installer based on debian-installer (aka d-i), but new versions use cloud-init on servers
+
+Noticed Desktop won't use cloud-init!
+
+apt-get -y install tftpd-hpa apache2 dnsmasq
+nano /etc/apache2/conf-available/tftp.conf
+
+Directory /srv/tftp
+        Options +FollowSymLinks +Indexes
+        Require all granted
+/Directory
+Alias /tftp /srv/tftp
+
+a2enconf tftp
+systemctl restart apache2
+
+edit dhcp settings
+mv /etc/dnsmasq.conf /etc/dnsmasq.conf.old
+nano /etc/dnsmasq.conf
+
+interface=enp1s0 #enp0s3 or #enp0s8
+bind-interfaces
+domain=kotilab.local
+ 
+dhcp-range=ens38,192.168.10.100,192.168.10.240,255.255.255.0,8h
+dhcp-option=option:router,192.168.10.1
+dhcp-option=option:dns-server,192.168.10.1
+dhcp-option=option:dns-server,192.168.10.1
+ 
+#enable-tftp
+tftp-root=/srv/tftp/
+dhcp-boot=bootx64.efi,linuxhint-s20,192.168.10.100
+pxe-prompt="Press F8 for PXE Network boot.", 5
+pxe-service=x86PC, "Install OS via PXE",pxelinux
+
+
+
+Enable all required service for auto start
+sudo systemctl enable systemd-resolved --now
+sudo systemctl restart systemd-resolved
+sudo systemctl enable dnsmasq --now
+sudo systemctl enable apache2 --now
+sudo systemctl enable tftpd-hpa --now
+
+sudo systemctl restart dnsmasq
+
+Support multiple Ubuntu versions:
+
+wget ubuntu.iso -O /srv/tftp/ubuntu-20.04-live-server-amd64.iso
+OR
+OR WILl SECOND VIDEO ABOUT DESKTOP....
+
+Extract kernel and initramfs files for pxe boot
+
+mount /srv/tftp/ubuntu-20.04-live-server-amd64.iso /mnt/
+
+Make diffrent folder for every version separately
+
+mkdir /srv/tftp/focal and so on.
+cp /mnt/casper/ vmlinuz,initrd  /srv/tftp/focal
+umount  /mnt
+
+Files for UEFI/Secure boot
+cd /tmp
+apt-get download shim.signed -y
+dpkg-deb --fsys-tarfile /tmp/shim-signed*deb | tar x ./usr/lib/shim/shimx64.efi.signed -O mark /srv/tftp/bootx64.efi
+
+apt download grub-efi-amd64-signed
+dpkg-deb --fsys-tarfile /tmp/grub-efi-amd64-signed*deb | tar x ./usr/lib/grub/x86_64-efi-signed/grubnetx64.efi.signed -O mark  /srv/tftp/grubx64.efi
+
+apt download grub-common
+dpkg-deb --fsys-tarfile grub-common*deb | tar x ./usr/share/grub/unicode.pf2 -O mark /srv/tftp/unicode.pf2
+
+Configure grub for netboot
+
+mkdir -p /srv/tftp/grub
+
+Multiple versions of Ubuntu
+nano /srv/tftp/grub/grub.cfg
+
+default=autoinstall
+timeout=30
+timeout_style=menu
+menuentry "22 server Installer - automated" --id=autoinstall 
+    linux /jammy-server/vmlinuz ip=dhcp url=http://192.168.10.100/tftp/jammy-server/jammy-live-server-amd64.iso autoinstall ds='nocloud-net;s=http://192.168.10.100/tftp/jammy-server/' cloud-config-url=/dev/null root=/dev/ram0
+    echo "Loading Ram Disk..."
+    initrd /jammy-server/initrd
+
+Basic configure for cloud-init for autoinstall ------------------------------------------
+
+two files for cloud-config: meta-data and user-data  meta-data for cloud service templates / images and user-data directive autoinstallation
+
+touch /srv/tftp/focal/meta-data
+
+# You may generate your own password by:
+#  mkpasswd --method=sha-512 ubuntu
+
+edit installation configure
+
+nano /srv/tftp/focal/user-data
+#cloud-config
+autoinstall:
+  version: 1
+  # use interactive-sections to avoid an automatic reboot
+  interactive-sections:
+    - locale
+  apt:
+    # even set to no/false, geoip lookup still happens
+    #geoip: no
+    preserve_sources_list: false
+    primary:
+    - arches: [amd64]
+      uri: http://fi.archive.ubuntu.com/ubuntu
+    - arches: [default]
+      uri: http://ports.ubuntu.com/ubuntu-ports
+  identity:
+ # keyboard: 
+  #locale: en_US.UTF-8
+  user-data:
+    timezone: Europe/Helsinki
+  # interface name will probably be different
+#  network:
+  ssh:
+    allow-pw: true
+    authorized-keys: []
+    install-server: true
+  # this creates an efi partition, /boot partition, and root(/) lvm volume
+  storage:
+    config:
+
+CHECK links
+
+chown tftp: -R /srv/tftp/
+chmod 777 -R /srv/tftp/
